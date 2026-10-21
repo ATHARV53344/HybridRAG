@@ -8,4 +8,3 @@ artifacts/
 results/
 .pytest_cache/
 data_smoke/
-results_smoke/
