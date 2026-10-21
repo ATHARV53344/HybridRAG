@@ -1,0 +1,40 @@
+# Tiny real-LLM smoke test on HotpotQA (needs internet + OPENAI_API_KEY in .env). Cost: a few cents.
+#   python -m src.experiments.run_baselines --config configs/openai_smoke.yaml --max-samples 5
+# 30 sampled questions -> 15 train / 6 dev / 9 test; the learned router trains on train+dev,
+# then 5 test questions are evaluated. Numbers from this run are a pipeline check, NOT results.
+seed: 42
+dataset:
+  name: hotpotqa
+  max_samples: 30
+  data_dir: data_smoke     # separate cache so it never collides with the 200-question real run
+embedding:
+  backend: tfidf           # no torch download; switch to sbert for the paper setting
+  model: sentence-transformers/all-MiniLM-L6-v2
+retrieval:
+  top_k: 5
+  kv: 10
+  h_max: 2
+  alpha: 0.6
+  beta: 0.4
+  gamma: 0.0
+  theta_dup: 0.95
+  fusion: eq4
+  context_budget_tokens: 1500
+router:
+  mode: learned
+  lambda_cost: 0.1
+  tau_r: 0.5
+  epsilon: 0.02
+generation:
+  provider: openai         # set OPENAI_API_KEY in .env
+  model: gpt-5.4-nano      # check the current name/price on platform.openai.com/docs/pricing
+  temperature: 0.0         # ignored for reasoning models (gpt-5*, o-series)
+  reasoning_effort: low    # reasoning models only; hidden reasoning tokens are billed as output
+  reasoning_headroom: 2000 # extra completion tokens so reasoning doesn't eat the JSON answer
+  timeout_s: 60
+verification:
+  tau_u: 0.5
+  tau_a: 0.8
+  tau_b: 0.4
+methods: [no_retrieval, vector_only, graph_only, hybrid_fixed, rule_router, adaptive, adaptive_verified, oracle]
+output_dir: results_smoke

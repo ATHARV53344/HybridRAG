@@ -44,6 +44,8 @@ Troubleshooting
 python -m pytest -q                                                        # 59 offline tests
 python -m src.experiments.run_baselines --config configs/default.yaml --max-samples 5   # smoke test (fixture + mock LLM)
 
+python -m src.experiments.run_baselines --config configs/openai_smoke.yaml --max-samples 5  # real-LLM check: 5 HotpotQA questions, OPENAI_API_KEY, a few cents
+
 python -m src.data.prepare --dataset hotpotqa --max-samples 200            # needs internet
 python -m src.indexing.build --dataset hotpotqa --config configs/experiments.yaml
 python -m src.experiments.run_baselines --config configs/experiments.yaml  # real run (set provider/model + API key)

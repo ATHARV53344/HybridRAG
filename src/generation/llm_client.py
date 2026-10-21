@@ -133,30 +133,73 @@ class AnthropicLLM(LLMClient):
         return LLMResponse("", time.perf_counter() - t0, error=err)
 
 
+_REASONING_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+# 4xx errors that a retry cannot fix (bad key, bad request, unknown model) - fail fast, don't burn retries
+_NON_RETRYABLE = ("AuthenticationError", "PermissionDeniedError", "BadRequestError", "NotFoundError",
+                  "UnprocessableEntityError")
+
+
+def is_reasoning_model(model: str) -> bool:
+    return model.lower().startswith(_REASONING_PREFIXES)
+
+
 class OpenAILLM(LLMClient):
+    """Chat Completions adapter.
+
+    Current models take `max_completion_tokens` (not `max_tokens`). Reasoning models (gpt-5*, o-series)
+    reject a custom temperature and spend hidden reasoning tokens out of the same completion budget, so
+    for them temperature is omitted, `reasoning_effort` is sent and `reasoning_headroom` extra tokens are
+    added to the cap - otherwise the visible JSON answer can come back empty. Reasoning tokens are billed
+    as output and are included in `tokens_out`.
+    """
+
     provider = "openai"
 
-    def __init__(self, model: str, temperature: float = 0.0, timeout_s: float = 60, retries: int = 3):
-        key = os.environ.get("OPENAI_API_KEY")
-        if not key:
-            raise RuntimeError("OPENAI_API_KEY is not set. Add it to .env or use generation.provider: mock.")
-        from openai import OpenAI
+    def __init__(self, model: str, temperature: float = 0.0, timeout_s: float = 60, retries: int = 3,
+                 reasoning: bool | None = None, reasoning_effort: str | None = "low", reasoning_headroom: int = 2000,
+                 client=None):
+        if client is None:
+            key = os.environ.get("OPENAI_API_KEY")
+            if not key:
+                raise RuntimeError("OPENAI_API_KEY is not set. Add it to .env or use generation.provider: mock.")
+            from openai import OpenAI
 
-        self.client = OpenAI(api_key=key, timeout=timeout_s)
+            client = OpenAI(api_key=key, timeout=timeout_s)
+        self.client = client
         self.model, self.temperature, self.retries = model, temperature, retries
+        self.reasoning = is_reasoning_model(model) if reasoning is None else reasoning
+        self.reasoning_effort, self.reasoning_headroom = reasoning_effort, reasoning_headroom
+
+    def request_kwargs(self, system: str, user: str, max_tokens: int) -> dict:
+        kw = {"model": self.model,
+              "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+        if self.reasoning:
+            kw["max_completion_tokens"] = max_tokens + self.reasoning_headroom
+            if self.reasoning_effort:
+                kw["reasoning_effort"] = self.reasoning_effort
+        else:
+            kw["max_completion_tokens"] = max_tokens
+            kw["temperature"] = self.temperature
+        return kw
 
     def complete(self, system: str, user: str, max_tokens: int = 300) -> LLMResponse:
         t0, err = time.perf_counter(), None
+        kw = self.request_kwargs(system, user, max_tokens)
         for attempt in range(self.retries):
             try:
-                r = self.client.chat.completions.create(
-                    model=self.model, temperature=self.temperature, max_tokens=max_tokens,
-                    messages=[{"role": "system", "content": system}, {"role": "user", "content": user}])
-                return LLMResponse(r.choices[0].message.content or "", time.perf_counter() - t0,
-                                   r.usage.prompt_tokens, r.usage.completion_tokens)
+                r = self.client.chat.completions.create(**kw)
+                text = r.choices[0].message.content or ""
+                if not text and r.choices[0].finish_reason == "length":
+                    return LLMResponse("", time.perf_counter() - t0, r.usage.prompt_tokens, r.usage.completion_tokens,
+                                       error="empty output: completion budget used up (raise reasoning_headroom "
+                                             "or lower reasoning_effort)")
+                return LLMResponse(text, time.perf_counter() - t0, r.usage.prompt_tokens, r.usage.completion_tokens)
             except Exception as e:
                 err = f"{type(e).__name__}: {e}"
-                time.sleep(2 ** attempt)
+                if type(e).__name__ in _NON_RETRYABLE:
+                    break
+                if attempt < self.retries - 1:
+                    time.sleep(2 ** attempt)
         return LLMResponse("", time.perf_counter() - t0, error=err)
 
 
@@ -167,5 +210,7 @@ def get_llm(cfg: dict) -> LLMClient:
     if p == "anthropic":
         return AnthropicLLM(cfg["model"], cfg.get("temperature", 0.0), cfg.get("timeout_s", 60))
     if p == "openai":
-        return OpenAILLM(cfg["model"], cfg.get("temperature", 0.0), cfg.get("timeout_s", 60))
+        return OpenAILLM(cfg["model"], cfg.get("temperature", 0.0), cfg.get("timeout_s", 60),
+                         reasoning=cfg.get("reasoning"), reasoning_effort=cfg.get("reasoning_effort", "low"),
+                         reasoning_headroom=cfg.get("reasoning_headroom", 2000))
     raise ValueError(f"Unknown LLM provider '{p}'")
