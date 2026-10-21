@@ -1,0 +1,35 @@
+# Default config: smoke-test friendly. Uses the synthetic fixture unless dataset is changed.
+seed: 42
+dataset:
+  name: fixture            # fixture | hotpotqa | musique | nq
+  max_samples: 5
+  data_dir: data
+embedding:
+  backend: tfidf           # sbert | tfidf  (tfidf = offline fallback, NOT the paper's setting)
+  model: sentence-transformers/all-MiniLM-L6-v2
+retrieval:
+  top_k: 4
+  kv: 6                    # vector candidates
+  h_max: 2                 # graph hops
+  alpha: 0.6               # Eq.4 weights (gamma=0 for benchmarks)
+  beta: 0.4
+  gamma: 0.0
+  theta_dup: 0.95
+  fusion: eq4              # eq4 | rrf
+  context_budget_tokens: 600
+router:
+  mode: rule               # rule | learned | oracle | fixed:<vector|graph|hybrid>
+  lambda_cost: 0.0
+  tau_r: 0.5
+  epsilon: 0.02
+generation:
+  provider: mock           # mock | anthropic | openai
+  model: mock
+  temperature: 0.0
+  timeout_s: 60
+verification:
+  tau_u: 0.5
+  tau_a: 0.8
+  tau_b: 0.4
+methods: [no_retrieval, vector_only, graph_only, hybrid_fixed, rule_router, adaptive, adaptive_verified]
+output_dir: results

@@ -1,0 +1,35 @@
+# Real experiment config. Edit provider/model, then run.
+seed: 42
+dataset:
+  name: hotpotqa
+  max_samples: 200
+  data_dir: data
+embedding:
+  backend: sbert
+  model: sentence-transformers/all-MiniLM-L6-v2
+retrieval:
+  top_k: 5
+  kv: 10
+  h_max: 2
+  alpha: 0.6
+  beta: 0.4
+  gamma: 0.0
+  theta_dup: 0.95
+  fusion: eq4
+  context_budget_tokens: 1500
+router:
+  mode: learned
+  lambda_cost: 0.1
+  tau_r: 0.5
+  epsilon: 0.02
+generation:
+  provider: anthropic      # set ANTHROPIC_API_KEY in .env
+  model: claude-haiku-5-5
+  temperature: 0.0
+  timeout_s: 60
+verification:
+  tau_u: 0.5
+  tau_a: 0.8
+  tau_b: 0.4
+methods: [no_retrieval, vector_only, graph_only, hybrid_fixed, rule_router, adaptive, adaptive_verified, oracle]
+output_dir: results
