@@ -1,4 +1,5 @@
-# Tiny real-LLM smoke test on HotpotQA (needs internet + OPENAI_API_KEY in .env). Cost: a few cents.
+# Tiny real-LLM smoke test on HotpotQA (needs internet + OPENAI_API_KEY in .env).
+# Measured 2026-10-21 with gpt-4.1-nano: 188 API calls, 104k input / 7.8k output tokens, ~$0.014, ~3 min.
 #   python -m src.experiments.run_baselines --config configs/openai_smoke.yaml --max-samples 5
 # 30 sampled questions -> 15 train / 6 dev / 9 test; the learned router trains on train+dev,
 # then 5 test questions are evaluated. Numbers from this run are a pipeline check, NOT results.
@@ -27,7 +28,7 @@ router:
   epsilon: 0.02
 generation:
   provider: openai         # set OPENAI_API_KEY in .env
-  model: gpt-5.4-nano      # check the current name/price on platform.openai.com/docs/pricing
+  model: gpt-4.1-nano      # cheapest in practice: no hidden reasoning tokens, honours temperature 0
   temperature: 0.0         # ignored for reasoning models (gpt-5*, o-series)
   reasoning_effort: low    # reasoning models only; hidden reasoning tokens are billed as output
   reasoning_headroom: 2000 # extra completion tokens so reasoning doesn't eat the JSON answer
@@ -37,4 +38,4 @@ verification:
   tau_a: 0.8
   tau_b: 0.4
 methods: [no_retrieval, vector_only, graph_only, hybrid_fixed, rule_router, adaptive, adaptive_verified, oracle]
-output_dir: results_smoke
+output_dir: results              # same folder the report/plot scripts read

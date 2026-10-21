@@ -44,7 +44,7 @@ Troubleshooting
 python -m pytest -q                                                        # 59 offline tests
 python -m src.experiments.run_baselines --config configs/default.yaml --max-samples 5   # smoke test (fixture + mock LLM)
 
-python -m src.experiments.run_baselines --config configs/openai_smoke.yaml --max-samples 5  # real-LLM check: 5 HotpotQA questions, OPENAI_API_KEY, a few cents
+python -m src.experiments.run_baselines --config configs/openai_smoke.yaml --max-samples 5  # real-LLM check: 5 HotpotQA questions, OPENAI_API_KEY, ~$0.014 on gpt-4.1-nano
 
 python -m src.data.prepare --dataset hotpotqa --max-samples 200            # needs internet
 python -m src.indexing.build --dataset hotpotqa --config configs/experiments.yaml
@@ -56,6 +56,26 @@ python -m src.experiments.make_report_md                                   # res
 ```
 
 Run order matters: **dev run first** (`--split dev --max-samples 50`), freeze configs, **then** the test split. `--split test` is the default for reporting.
+
+### First real-LLM smoke run (2026-10-21, gpt-4.1-nano, 5 HotpotQA test questions)
+
+Pipeline check only — n=5, CIs span most of [0, 1]; **do not report these numbers.**
+
+| System | EM | F1 | Recall@k | AllGold@k | median ms | input tokens/q |
+|---|---|---|---|---|---|---|
+| B0 No retrieval | 0.00 | 0.07 | — | — | 743 | 109 |
+| B1 Vector-only | 0.40 | 0.53 | 0.80 | 0.80 | 930 | 800 |
+| B2 Graph-only | 0.20 | 0.33 | 0.40 | 0.00 | 987 | 1132 |
+| B3 Fixed hybrid | 0.40 | 0.53 | 0.90 | 0.80 | 1168 | 842 |
+| B4 Rule router | 0.40 | 0.57 | 0.80 | 0.60 | 1145 | 938 |
+| P Adaptive | 0.40 | 0.53 | 0.90 | 0.80 | 1283 | 842 |
+| P+ Adaptive+Verify | 0.40 | 0.53 | 0.90 | 0.80 | 16372 | 4708 |
+
+What it showed: every stage runs against a real API with 0 failed calls; graph-only is weakest
+(rule-based entity extraction); the learned router sent all 5 to hybrid (12 of its 15 training labels were
+hybrid); verification costs ~14x the latency and ~5.6x the tokens of answering and changed no answer here.
+Two of the "wrong" answers are scoring artefacts ("Filmmaker" vs gold "director", "British" vs "a British
+composer"). Raw records: `results/raw/openai-smoke_20261021-234142/`.
 
 ## 3. Showing metrics to evaluators in the terminal
 
