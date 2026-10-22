@@ -79,3 +79,24 @@ def test_failed_api_calls_not_scored_correct(tmp_path, monkeypatch):
     pipe = Pipeline(R, AnswerGenerator(Down()), None, 3)
     rec = pipe.run("vector_only", ds.examples[0], FixedRouter("vector"))
     assert rec["error"] and rec["f1"] == 0.0 and rec["em"] == 0.0 and rec["predicted_answer"] == ""
+
+
+def test_parallel_batch_matches_sequential_in_order():
+    from src.generation.answer_generator import AnswerGenerator
+    from src.generation.llm_client import MockLLM
+    from src.pipeline import Pipeline
+    from src.routing.adaptive_router import FixedRouter
+    from src.data.fixture import load_fixture
+    from src.indexing.store import build_store
+    from src.retrieval.dispatcher import Retrievers
+    from src.verification.evidence_verifier import EvidenceVerifier
+
+    ds = load_fixture()
+    R = Retrievers(build_store(ds, {"backend": "tfidf"}, save=False), CFG["retrieval"])
+    ver = EvidenceVerifier(CFG["verification"])
+    seq = Pipeline(R, AnswerGenerator(MockLLM()), ver, 3, workers=1)
+    par = Pipeline(R, AnswerGenerator(MockLLM()), ver, 3, workers=4)
+    a = seq.run_batch("hybrid_fixed", ds.examples, FixedRouter("hybrid"), verify=True)
+    b = par.run_batch("hybrid_fixed", ds.examples, FixedRouter("hybrid"), verify=True)
+    keys = ("eid", "route", "retrieved_pids", "predicted_answer", "f1", "verification")
+    assert [{k: r[k] for k in keys} for r in a] == [{k: r[k] for k in keys} for r in b]

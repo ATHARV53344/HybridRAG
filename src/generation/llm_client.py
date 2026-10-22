@@ -210,7 +210,8 @@ def get_llm(cfg: dict) -> LLMClient:
     if p == "anthropic":
         return AnthropicLLM(cfg["model"], cfg.get("temperature", 0.0), cfg.get("timeout_s", 60))
     if p == "openai":
-        return OpenAILLM(cfg["model"], cfg.get("temperature", 0.0), cfg.get("timeout_s", 60),
+        # 6 attempts = up to ~31 s of backoff, so concurrent runs ride out per-minute rate limits
+        return OpenAILLM(cfg["model"], cfg.get("temperature", 0.0), cfg.get("timeout_s", 60), cfg.get("retries", 6),
                          reasoning=cfg.get("reasoning"), reasoning_effort=cfg.get("reasoning_effort", "low"),
                          reasoning_headroom=cfg.get("reasoning_headroom", 2000))
     raise ValueError(f"Unknown LLM provider '{p}'")

@@ -28,6 +28,7 @@ generation:
   model: gpt-4.1-nano
   temperature: 0.0
   timeout_s: 60
+  concurrency: 8           # questions answered in parallel; lower it if you hit rate limits
 verification:
   tau_u: 0.5
   tau_a: 0.8

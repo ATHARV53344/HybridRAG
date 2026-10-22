@@ -53,7 +53,8 @@ def run_experiment(cfg: dict, split: str = "test", max_samples: int | None = Non
     llm = get_llm(cfg["generation"])
     backend = "lexical" if llm.provider == "mock" else "llm"
     verifier = EvidenceVerifier(cfg["verification"], llm, backend)
-    pipe = Pipeline(R, AnswerGenerator(llm), verifier, cfg["retrieval"]["top_k"])
+    workers = int(cfg["generation"].get("concurrency", 1))
+    pipe = Pipeline(R, AnswerGenerator(llm), verifier, cfg["retrieval"]["top_k"], workers)
     linker = R.graph.link_entities
 
     by_split = {s: [e for e in ds.examples if e.split == s] for s in ("train", "dev", "test")}
@@ -96,21 +97,21 @@ def run_experiment(cfg: dict, split: str = "test", max_samples: int | None = Non
             for i, ex in enumerate(eval_ex):
                 f1s = {FIXED[k]: fixed_recs[k][i]["f1_original"] for k in FIXED}
                 best_route[ex.eid] = derive_labels(f1s, costs, cfg["router"].get("epsilon", 0.02))
-        for ex in eval_ex:
-            if m == "no_retrieval":
-                r = pipe.run(m, ex, None)
-            elif m in FIXED:
-                r = pipe.run(m, ex, FixedRouter(FIXED[m]))
-            elif m == "rule_router":
-                r = pipe.run(m, ex, rule)
-            elif m == "adaptive":
-                r = pipe.run(m, ex, adaptive_router)
-            elif m == "adaptive_verified":
-                r = pipe.run(m, ex, adaptive_router, verify=True)
-            elif m == "oracle":
-                r = pipe.run(m, ex, OracleRouter(best_route))
-            else:
-                raise ValueError(f"Unknown method '{m}'")
+        if m == "no_retrieval":
+            recs = pipe.run_batch(m, eval_ex, None)
+        elif m in FIXED:
+            recs = pipe.run_batch(m, eval_ex, FixedRouter(FIXED[m]))
+        elif m == "rule_router":
+            recs = pipe.run_batch(m, eval_ex, rule)
+        elif m == "adaptive":
+            recs = pipe.run_batch(m, eval_ex, adaptive_router)
+        elif m == "adaptive_verified":
+            recs = pipe.run_batch(m, eval_ex, adaptive_router, verify=True)
+        elif m == "oracle":
+            recs = pipe.run_batch(m, eval_ex, OracleRouter(best_route))
+        else:
+            raise ValueError(f"Unknown method '{m}'")
+        for r in recs:
             if m in aux:
                 r["method"] = m  # auxiliary run kept for oracle labelling only
                 r["auxiliary"] = True
@@ -128,7 +129,7 @@ def run_experiment(cfg: dict, split: str = "test", max_samples: int | None = Non
             "n_eval_examples": len(eval_ex), "methods": methods, "auxiliary_methods": sorted(aux),
             "seed": cfg.get("seed", 42), "config": cfg, "git_commit": git_commit(),
             "embedder": store.embedder.name, "llm_provider": llm.provider, "llm_model": llm.model,
-            "verifier_backend": backend, "router_info": router_info,
+            "verifier_backend": backend, "router_info": router_info, "concurrency": workers,
             "oracle_note": "oracle uses ground truth; upper bound only" if "oracle" in methods else None,
             "wall_clock_s": time.perf_counter() - t_start,
             "latency_scope": "per-query retrieval/generation/verification; EXCLUDES index build and model load",

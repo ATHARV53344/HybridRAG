@@ -1,0 +1,38 @@
+# 100-test-question HotpotQA run on OpenAI gpt-4.1-nano (paper settings otherwise identical to experiments.yaml).
+#   python -m src.experiments.run_baselines --config configs/openai_test100.yaml --max-samples 100
+# Measured 2026-10-22: 2,804 API calls, 1.72M input / 112k output tokens, ~$0.22, 5.4 min at concurrency 8.
+seed: 42
+dataset:
+  name: hotpotqa
+  max_samples: 334        # -> 167 train / 66 dev / 101 test; run with --max-samples 100
+  data_dir: data_test100
+embedding:
+  backend: sbert
+  model: sentence-transformers/all-MiniLM-L6-v2
+retrieval:
+  top_k: 5
+  kv: 10
+  h_max: 2
+  alpha: 0.6
+  beta: 0.4
+  gamma: 0.0
+  theta_dup: 0.95
+  fusion: eq4
+  context_budget_tokens: 1500
+router:
+  mode: learned
+  lambda_cost: 0.1
+  tau_r: 0.5
+  epsilon: 0.02
+generation:
+  provider: openai         # set OPENAI_API_KEY in .env
+  model: gpt-4.1-nano
+  temperature: 0.0
+  timeout_s: 60
+  concurrency: 8           # questions answered in parallel; lower it if you hit rate limits
+verification:
+  tau_u: 0.5
+  tau_a: 0.8
+  tau_b: 0.4
+methods: [no_retrieval, vector_only, graph_only, hybrid_fixed, rule_router, adaptive, adaptive_verified, oracle]
+output_dir: results
