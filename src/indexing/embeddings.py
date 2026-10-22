@@ -8,6 +8,8 @@ All embeddings are L2-normalised float32, so inner product == cosine similarity.
 """
 from __future__ import annotations
 
+import threading
+
 import numpy as np
 
 
@@ -45,10 +47,12 @@ class SbertEmbedder(Embedder):
         self.name = model_name
         self._model = SentenceTransformer(model_name)
         self.dim = self._model.get_sentence_embedding_dimension()
+        self._lock = threading.Lock()  # the torch model segfaults under concurrent calls (pipeline workers > 1)
 
     def encode(self, texts: list[str]) -> np.ndarray:
-        return self._model.encode(texts, normalize_embeddings=True, convert_to_numpy=True,
-                                  show_progress_bar=False).astype(np.float32)
+        with self._lock:
+            return self._model.encode(texts, normalize_embeddings=True, convert_to_numpy=True,
+                                      show_progress_bar=False).astype(np.float32)
 
 
 def get_embedder(cfg: dict) -> Embedder:

@@ -34,7 +34,7 @@ def measured_costs(records_by_route: dict[str, list[dict]]) -> dict[str, float]:
 
 
 def _run_routes(pipe: Pipeline, examples: list[Example]) -> dict[str, list[dict]]:
-    return {r: [pipe.run(f"train_{r}", ex, FixedRouter(r), verify=False) for ex in examples] for r in ROUTES}
+    return {r: pipe.run_batch(f"train_{r}", examples, FixedRouter(r), verify=False) for r in ROUTES}
 
 
 def train_router(pipe: Pipeline, linker, train: list[Example], dev: list[Example], rcfg: dict) -> tuple[LearnedRouter, dict]:

@@ -33,6 +33,7 @@ generation:
   reasoning_effort: low    # reasoning models only; hidden reasoning tokens are billed as output
   reasoning_headroom: 2000 # extra completion tokens so reasoning doesn't eat the JSON answer
   timeout_s: 60
+  concurrency: 8           # questions answered in parallel; lower it if you hit rate limits
 verification:
   tau_u: 0.5
   tau_a: 0.8

@@ -77,6 +77,40 @@ hybrid); verification costs ~14x the latency and ~5.6x the tokens of answering a
 Two of the "wrong" answers are scoring artefacts ("Filmmaker" vs gold "director", "British" vs "a British
 composer"). Raw records: `results/raw/openai-smoke_20261021-234142/`.
 
+### 100-question run (2026-10-22, gpt-4.1-nano, sbert embeddings)
+
+`configs/openai_test100.yaml --max-samples 100`: 334 sampled questions → 167 train / 66 dev for the router,
+**100 test questions** scored (83 bridge, 17 comparison). 2,804 API calls, 0 failures, **$0.22**, 5.4 min
+with `concurrency: 8`. Single run, one seed, one cheap model: preliminary, not final paper numbers.
+
+| System | EM | F1 (95% CI) | Recall@k | AllGold@k | median ms | input tokens/q |
+|---|---|---|---|---|---|---|
+| B0 No retrieval | 0.23 | 0.32 (0.23–0.40) | — | — | 754 | 100 |
+| B1 Vector-only | 0.40 | 0.51 (0.42–0.61) | 0.78 | 0.58 | 944 | 833 |
+| B2 Graph-only | 0.21 | 0.28 (0.21–0.36) | 0.26 | 0.05 | 963 | 1312 |
+| B3 Fixed hybrid | 0.32 | 0.45 (0.36–0.54) | 0.67 | 0.40 | 974 | 1016 |
+| B4 Rule router | 0.36 | 0.48 (0.39–0.57) | 0.68 | 0.46 | 938 | 974 |
+| P Adaptive (learned) | 0.39 | 0.52 (0.43–0.61) | 0.78 | 0.58 | 925 | 833 |
+| P+ Adaptive+Verify | 0.38 | 0.49 (0.40–0.58) | 0.78 | 0.58 | 11835 | 3868 |
+| O Oracle (upper bound) | 0.42 | 0.58 (0.49–0.67) | 0.77 | 0.59 | 954 | 860 |
+
+What it shows:
+- **Vector-only is the best fixed route.** Graph-only is far behind (it finds every supporting passage for
+  only 5% of questions — the capitalised-phrase entity extractor is the bottleneck), and adding graph
+  evidence (hybrid) *lowers* F1 vs vector (−0.06, CI crosses 0).
+- **The learned router collapsed to "always vector".** 147 of its 167 training labels were vector (Eq. 3 picks
+  the cheapest route within ε), so it routed all 100 test questions to vector. Adaptive − vector F1 = +0.003
+  (CI −0.01…+0.02): the tiny gap is API nondeterminism, not routing. The rule router does worse than vector
+  because it sends 57% of questions to the weaker graph/hybrid routes.
+- **There is headroom.** Oracle routing reaches F1 0.58 (+0.06 over vector), mostly from sending ~13% of
+  questions to hybrid/graph. A router that finds those questions would help; the current features don't.
+- **Verification costs more than it gives here.** It withheld 12% of answers; when it flags an answer as
+  wrong it is right 86% of the time, but it catches only 26% of wrong answers, so F1 drops 0.52 → 0.49
+  (CI −0.06…−0.003 vs vector) at ~12× latency and ~4.6× tokens.
+- Latencies were measured with 8 questions in flight; compare them only with runs at the same `concurrency`.
+
+Raw records: `results/raw/baselines-test100_20261022-130834/`.
+
 ## 3. Showing metrics to evaluators in the terminal
 
 ```powershell

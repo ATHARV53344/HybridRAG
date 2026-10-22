@@ -15,8 +15,20 @@ from src.verification.evidence_verifier import EvidenceVerifier
 
 
 class Pipeline:
-    def __init__(self, retrievers: Retrievers, generator: AnswerGenerator, verifier: EvidenceVerifier | None, top_k: int):
-        self.R, self.gen, self.ver, self.k = retrievers, generator, verifier, top_k
+    def __init__(self, retrievers: Retrievers, generator: AnswerGenerator, verifier: EvidenceVerifier | None, top_k: int,
+                 workers: int = 1):
+        self.R, self.gen, self.ver, self.k, self.workers = retrievers, generator, verifier, top_k, workers
+
+    def run_batch(self, method: str, examples: list[Example], router: Any | None, verify: bool = False) -> list[dict]:
+        """`run` over many examples, `workers` at a time (threads; the time is spent waiting on the LLM API).
+        Records come back in input order. Routers are stateless at inference, so sharing one is safe.
+        Per-query latencies include any client-side queueing, so compare latencies only at equal `workers`."""
+        if self.workers <= 1 or len(examples) <= 1:
+            return [self.run(method, ex, router, verify) for ex in examples]
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(self.workers) as pool:
+            return list(pool.map(lambda ex: self.run(method, ex, router, verify), examples))
 
     def run(self, method: str, ex: Example, router: Any | None, verify: bool = False) -> dict:
         """`router=None` => no retrieval (B0). The router sees ONLY the question (oracle gets eid)."""
